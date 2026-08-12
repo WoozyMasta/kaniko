@@ -403,7 +403,7 @@ func DoPush(image v1.Image, opts *config.KanikoOptions) error {
 
 		logrus.Infof("Pushing image to %s", destRef.String())
 		pushImage := image
-		if config.FF.CrossRepoMount {
+		if config.FF.CrossRepoMount && !config.FF.PathScopedRegistryAuth {
 			pushImage = mounts.MountableImage(image, destRef.RegistryStr())
 		}
 
@@ -430,7 +430,7 @@ func DoPush(image v1.Image, opts *config.KanikoOptions) error {
 			}
 			logrus.Infof("Pushed %s", digest)
 			// pushLayerToCache funnels through here, so cache entries land here too.
-			if config.FF.CrossRepoMount {
+			if config.FF.CrossRepoMount && !config.FF.PathScopedRegistryAuth {
 				mounts.RecordImage(image, destRef.Context())
 			}
 			return nil
