@@ -160,6 +160,7 @@ expect - see [Known Issues](#known-issues).
       - [Flag `FF_KANIKO_SKIP_CACHED_STAGES`](#flag-ff_kaniko_skip_cached_stages)
       - [Flag `FF_KANIKO_SHARED_BASE_CACHE`](#flag-ff_kaniko_shared_base_cache)
       - [Flag `FF_KANIKO_CROSS_REPO_MOUNT`](#flag-ff_kaniko_cross_repo_mount)
+      - [Flag `FF_KANIKO_PATH_SCOPED_REGISTRY_AUTH`](#flag-ff_kaniko_path_scoped_registry_auth)
     - [Assertion Overrides](#assertion-overrides)
     - [Telemetry](#telemetry)
     - [Debug Image](#debug-image)
@@ -1434,6 +1435,24 @@ Becomes default in `v1.29.0`.
 A registry can copy a blob between its own repositories for free, but only if it is told which repository already holds it. Kaniko loses that as soon as it copies a layer locally. Worse, with `--cache` every built layer goes up twice, once to the cache repo and once inside the image. Set this flag to `true` to remember which layers can be mounted remotely and which ones genuinely need to be pushed.
 Defaults to `false`.
 Becomes default in `v1.29.0`.
+
+#### Flag `FF_KANIKO_PATH_SCOPED_REGISTRY_AUTH`
+
+Kaniko normally selects a credential for an exact repository
+or the whole registry host, but cannot select one configured
+for an intermediate namespace such as `registry.example.com/org-a`.
+Set this flag to `true` to also match credentials configured
+for an intermediate repository path, most specific first:
+`registry.example.com/org-a/project/image`,
+then `registry.example.com/org-a/project`,
+then `registry.example.com/org-a`, then `registry.example.com`.
+
+Applies to `auths` entries (in `config.json` and `DOCKER_AUTH_CONFIG`) only;
+credential helpers keep resolving against the bare registry host.
+See [Credential Provider Priorities][] for the exact lookup order.
+Defaults to `false`.
+
+[Credential Provider Priorities]: docs/registries.md#credential-provider-priorities
 
 ### Assertion Overrides
 
