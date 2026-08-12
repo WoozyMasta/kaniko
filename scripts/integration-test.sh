@@ -78,6 +78,7 @@ if [[ -n ${LOCAL} ]]; then
   start_local_path_scoped_auth_proxy
 
   IMAGE_REPO="localhost:5000"
+  export PATH_SCOPED_AUTH_PROXY_ADDR="localhost:5002"
 fi
 
 FLAGS+=(
@@ -89,5 +90,4 @@ if [[ -n ${COVERAGE_DIR} ]]; then
 fi
 
 export TLS_REGISTRY_CERT="/tmp/kaniko-tls-registry/tls.crt"
-export PATH_SCOPED_AUTH_PROXY_ADDR="localhost:5002"
 go test -v ./integration/... "${FLAGS[@]}" "$@"
