@@ -18,12 +18,14 @@ package executor
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -171,6 +173,63 @@ func TestCrossRepoMountScopes(t *testing.T) {
 		sourceB.Scope(transport.PullScope),
 	}
 	testutil.CheckErrorAndDeepEqual(t, false, nil, want, got)
+}
+
+func TestCanAuthorizeCrossRepoMountsBearer(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		allow bool
+	}{
+		{name: "combined scopes allowed", allow: true},
+		{name: "combined scopes denied", allow: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var sourceScope string
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v2/":
+					w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm=%q,service="test-registry"`, server.URL+"/token"))
+					w.WriteHeader(http.StatusUnauthorized)
+				case "/token":
+					scopes := r.URL.Query()["scope"]
+					for _, scope := range scopes {
+						if strings.HasSuffix(scope, ":pull") {
+							sourceScope = scope
+						}
+					}
+					if !tc.allow && sourceScope != "" {
+						http.Error(w, "combined scopes denied", http.StatusForbidden)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"token":"test-token"}`))
+				default:
+					http.Error(w, "unexpected request", http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+
+			host := strings.TrimPrefix(server.URL, "http://")
+			dest := mustTag(t, host+"/team/app:latest").Context()
+			source := mustTag(t, host+"/team/base:latest")
+			img := fakeImage{ImageLayers: []v1.Layer{
+				&remote.MountableLayer{Layer: fakeLayer{}, Reference: source},
+			}}
+			auth := authn.FromConfig(authn.AuthConfig{Username: "user", Password: "password"})
+
+			allowed, err := canAuthorizeCrossRepoMounts(context.Background(), img, dest, auth, http.DefaultTransport)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if allowed != tc.allow {
+				t.Fatalf("allowed = %t, want %t", allowed, tc.allow)
+			}
+			if sourceScope != source.Scope(transport.PullScope) {
+				t.Fatalf("source scope = %q, want %q", sourceScope, source.Scope(transport.PullScope))
+			}
+		})
+	}
 }
 
 type mockRoundTripper struct{}
