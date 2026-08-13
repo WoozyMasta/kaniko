@@ -21,9 +21,10 @@ limitations under the License.
 // from, which every local copy kaniko makes throws away. Keyed by digest rather than held on
 // the layer, so a copy that keeps the bytes keeps the entry and one that rewrites them misses.
 //
-// Only repositories this process read from or wrote to belong here. remote.Write fails a push
-// outright when the token request for a mount source is refused, so an unproven entry is not
-// a missed optimisation but a broken build.
+// Only repositories this process read from or wrote to belong here.
+// With path-scoped authentication a recorded source may not be authorized by destination credential.
+// The executor preflights the combined scopes
+// and falls back to a normal upload when the mount cannot be authorized.
 package mounts
 
 import (
