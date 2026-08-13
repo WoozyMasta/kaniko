@@ -85,13 +85,18 @@ func Mountable(repos []name.Repository, registry string) (name.Repository, bool)
 }
 
 func MountableImage(img v1.Image, registry string) v1.Image {
-	return &mountableImage{Image: img, registry: registry}
+	return &mountableImage{
+		Image:    img,
+		registry: registry,
+		sources:  Snapshot(),
+	}
 }
 
 type mountableImage struct {
 	v1.Image
 
 	registry string
+	sources  map[v1.Hash][]name.Repository
 }
 
 // Layers is the only accessor remote.Write reads to decide what it sends, so LayerByDigest
@@ -102,13 +107,11 @@ func (m *mountableImage) Layers() ([]v1.Layer, error) {
 		return nil, err
 	}
 	tagged := make([]v1.Layer, 0, len(layers))
-	mu.Lock()
-	defer mu.Unlock()
 	for _, l := range layers {
 		layer := l
 		digest, err := l.Digest()
 		if err == nil {
-			repo, ok := Mountable(sources[digest], m.registry)
+			repo, ok := Mountable(m.sources[digest], m.registry)
 			if ok {
 				layer = &remote.MountableLayer{Layer: l, Reference: repo.Digest(digest.String())}
 			}

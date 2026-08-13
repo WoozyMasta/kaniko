@@ -61,13 +61,6 @@ Two things are deliberately limited when the flag is enabled:
   kaniko selects one credential locally before making a request,
   it never retries a request with a different credential
   after a failed authentication.
-* Cross-repository blob mounting is disabled
-  while path-scoped authentication is enabled.
-  A mount may require source and destination repository scopes
-  to be authorized by the same credential,
-  which cannot be assumed when different repository paths may resolve
-  to different credentials.
-  Layers fall back to the normal upload path instead.
 
 This is opt-in and defaults to `false`. With the flag unset (or `false`),
 the default keychain keeps its existing behavior:

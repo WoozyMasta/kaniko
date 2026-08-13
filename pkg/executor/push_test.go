@@ -28,8 +28,11 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/validate"
 	"github.com/osscontainertools/kaniko/pkg/config"
 	"github.com/osscontainertools/kaniko/pkg/util"
@@ -139,6 +142,35 @@ func TestHeaderAdded(t *testing.T) {
 			testutil.CheckErrorAndDeepEqual(t, false, err, test.expected, string(body))
 		})
 	}
+}
+
+func TestCrossRepoMountScopes(t *testing.T) {
+	dest := mustTag(t, "registry.example.com/team/app:latest").Context()
+	sourceA := mustTag(t, "registry.example.com/team/base:latest")
+	sourceB := mustTag(t, "registry.example.com/shared/runtime:latest")
+	crossRegistry := mustTag(t, "other.example.com/team/base:latest")
+
+	img := fakeImage{ImageLayers: []v1.Layer{
+		&remote.MountableLayer{Layer: fakeLayer{}, Reference: sourceA},
+		&remote.MountableLayer{Layer: fakeLayer{}, Reference: sourceA},
+		&remote.MountableLayer{Layer: fakeLayer{}, Reference: sourceB},
+		&remote.MountableLayer{Layer: fakeLayer{}, Reference: crossRegistry},
+	}}
+
+	got, hasMountCandidates, err := crossRepoMountScopes(img, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasMountCandidates {
+		t.Fatal("expected same-registry mount candidates")
+	}
+
+	want := []string{
+		dest.Scope(transport.PushScope),
+		sourceA.Scope(transport.PullScope),
+		sourceB.Scope(transport.PullScope),
+	}
+	testutil.CheckErrorAndDeepEqual(t, false, nil, want, got)
 }
 
 type mockRoundTripper struct{}
