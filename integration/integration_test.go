@@ -1635,12 +1635,16 @@ func TestPathScopedRegistryAuth(t *testing.T) {
 		return string(out)
 	}
 
-	configFile := func(entries map[string]string) []string {
+	writeConfig := func(config string) []string {
 		path := filepath.Join(t.TempDir(), "config.json")
-		if err := os.WriteFile(path, []byte(authConfig(entries)), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(config), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		return []string{"-v", path + ":/kaniko/.docker/config.json:ro"}
+	}
+
+	configFile := func(entries map[string]string) []string {
+		return writeConfig(authConfig(entries))
 	}
 
 	configEnv := func(entries map[string]string) []string {
@@ -1699,6 +1703,36 @@ func TestPathScopedRegistryAuth(t *testing.T) {
 		}
 		if !bytes.Contains(out, []byte("UNAUTHORIZED")) {
 			t.Fatalf("expected authentication failure, got: %v\n%s", err, out)
+		}
+	})
+
+	t.Run("credential helper for the exact repository is consulted", func(t *testing.T) {
+		helper := filepath.Join(t.TempDir(), "docker-credential-mz1002")
+		build := exec.Command("go", "build", "-o", helper, "./testdata/credhelper")
+		build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux")
+		out, err := build.CombinedOutput()
+		if err != nil {
+			t.Fatalf("building the credential helper: %v\n%s", err, out)
+		}
+
+		exact := strings.TrimSuffix(dest, ":latest")
+		config, err := json.Marshal(map[string]any{
+			"auths":       map[string]map[string]string{registry: {"auth": base64.StdEncoding.EncodeToString([]byte(broken))}},
+			"credHelpers": map[string]string{exact: "mz1002"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		username, secret, _ := strings.Cut(working, ":")
+		credFlags := append(writeConfig(string(config)),
+			"-v", helper+":/kaniko/docker-credential-mz1002:ro",
+			"-e", "HELPER_USERNAME="+username,
+			"-e", "HELPER_SECRET="+secret,
+		)
+		out, err = run(credFlags, pullDockerfile, "--build-arg", "IMAGE_NAME="+dest, "--no-push", "--no-push-cache")
+		if err != nil {
+			t.Fatalf("pull failed with a credential helper on the exact repository: %v\n%s", err, out)
 		}
 	})
 
