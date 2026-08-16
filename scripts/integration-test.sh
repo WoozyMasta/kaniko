@@ -38,22 +38,6 @@ function start_local_tls_registry {
   fi
 }
 
-function start_local_path_scoped_auth_proxy {
-  local dir="/tmp/kaniko-path-scoped-auth-proxy"
-  "$(dirname "$0")/setup-path-scoped-auth-proxy.sh"
-  if ! docker start kaniko-path-scoped-auth-proxy 2>/dev/null; then
-    docker rm -f kaniko-path-scoped-auth-proxy 2>/dev/null || :
-    docker run -d --name kaniko-path-scoped-auth-proxy \
-      -p 127.0.0.1:5002:5002 \
-      --add-host=host.docker.internal:host-gateway \
-      -v "${dir}/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-      -v "${dir}/htpasswd-org-a:/etc/nginx/htpasswd-org-a:ro" \
-      -v "${dir}/htpasswd-org-b:/etc/nginx/htpasswd-org-b:ro" \
-      -v "${dir}/htpasswd-project:/etc/nginx/htpasswd-project:ro" \
-      nginx:alpine
-  fi
-}
-
 IMAGE_REPO="${IMAGE_REPO:-gcr.io/kaniko-test}"
 
 docker version
@@ -75,10 +59,8 @@ if [[ -n ${LOCAL} ]]; then
   echo "running in local mode, mocking registry..."
   start_local_registry
   start_local_tls_registry
-  start_local_path_scoped_auth_proxy
 
   IMAGE_REPO="localhost:5000"
-  export PATH_SCOPED_AUTH_PROXY_ADDR="localhost:5002"
 fi
 
 FLAGS+=(
@@ -91,3 +73,4 @@ fi
 
 export TLS_REGISTRY_CERT="/tmp/kaniko-tls-registry/tls.crt"
 go test -v ./integration/... "${FLAGS[@]}" "$@"
+
